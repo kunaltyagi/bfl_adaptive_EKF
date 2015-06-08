@@ -49,14 +49,26 @@ public:
   void AllocateMeasModelExt( const unsigned int& meas_dimensions);
   
 private:
-  struct MeasUpdateVariablesAdapt
+  // @TODO: replace all these by a friend class AdaptiveExtendedKalmanFilter in KalmanFilter and ExtendedKalmanFilter
+  struct MeasUpdateVariables
+  {
+    Matrix _S_Matrix;
+    Matrix _K;
+    ColumnVector _innov;
+    Matrix _postHT;
+    MeasUpdateVariables() {};
+    MeasUpdateVariables(unsigned int meas_dimension, unsigned int state_dimension):
+      _S_Matrix(meas_dimension,meas_dimension)
+    , _K(state_dimension,meas_dimension)
+    , _innov(meas_dimension)
+    , _postHT(state_dimension,meas_dimension)
+{};
+  }; //struct
+  struct MeasUpdateVariablesExt
   {
     SymmetricMatrix _R;
-    SymmetricMatrix _Q;
-    SymmetricMatrix _W;
-    Matrix _Optimal_S;
-    ColumnVector _Autocorrelation_C;
-    // C[0] = 
+    Matrix _H;
+    ColumnVector _Z;
     MeasUpdateVariablesExt() {};
     MeasUpdateVariablesExt(unsigned int meas_dimension, unsigned int state_dimension):
       _R(meas_dimension)
@@ -64,6 +76,45 @@ private:
     , _Z(meas_dimension)
 {};
   }; //struct
+  
+protected:
+  // variables to avoid allocation during update calls
+  ColumnVector  _Mu_new;
+  SymmetricMatrix _Sigma_new;
+  Matrix _Sigma_temp;
+  Matrix _Sigma_temp_par;
+  Matrix _SMatrix;
+  Matrix _K;
+  std::map<unsigned int, MeasUpdateVariables> _mapMeasUpdateVariables;
+  std::map<unsigned int, MeasUpdateVariables>::iterator _mapMeasUpdateVariables_it;
+  
+  void PostSigmaSet( const MatrixWrapper::SymmetricMatrix& s);
+  void PostMuSet( const MatrixWrapper::ColumnVector& c);
+  void CalculateSysUpdate(const MatrixWrapper::ColumnVector& J, const MatrixWrapper::Matrix& F, const MatrixWrapper::SymmetricMatrix& Q);
+  void CalculateMeasUpdate(const MatrixWrapper::ColumnVector& z, const MatrixWrapper::ColumnVector& Z, const MatrixWrapper::Matrix& H, const MatrixWrapper::SymmetricMatrix& R);
+  virtual void SysUpdate(SystemModel<MatrixWrapper::ColumnVector>* const sysmodel,
+                         const MatrixWrapper::ColumnVector& u) = 0;
+  virtual void MeasUpdate(MeasurementModel<MatrixWrapper::ColumnVector,MatrixWrapper::ColumnVector>* const measmodel,
+                          const MatrixWrapper::ColumnVector& z,
+                          const MatrixWrapper::ColumnVector& s) = 0;
+  virtual bool UpdateInternal(SystemModel<MatrixWrapper::ColumnVector>* const sysmodel,
+                              const MatrixWrapper::ColumnVector& u,
+                              MeasurementModel<MatrixWrapper::ColumnVector,MatrixWrapper::ColumnVector>* const measmodel,
+                              const MatrixWrapper::ColumnVector& z,
+                              const MatrixWrapper::ColumnVector& s);
+  
+  virtual void SysUpdate(SystemModel<MatrixWrapper::ColumnVector>* const sysmodel,
+                         const MatrixWrapper::ColumnVector& u);
+  virtual void MeasUpdate(MeasurementModel<MatrixWrapper::ColumnVector,MatrixWrapper::ColumnVector>* const measmodel,
+                          const MatrixWrapper::ColumnVector& z,
+                          const MatrixWrapper::ColumnVector& s);
+  // variables to avoid allocation on the heap
+  ColumnVector _x;
+  ColumnVector _J;
+  Matrix    _F;
+  SymmetricMatrix _Q;
+  std::map<unsigned int, MeasUpdateVariablesExt> _mapMeasUpdateVariablesExt;
+  std::map<unsigned int, MeasUpdateVariablesExt>::iterator _mapMeasUpdateVariablesExt_it;
   
   
 };  // class
