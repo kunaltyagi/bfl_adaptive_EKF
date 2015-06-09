@@ -92,11 +92,11 @@ protected:
   void PostMuSet( const MatrixWrapper::ColumnVector& c);
   void CalculateSysUpdate(const MatrixWrapper::ColumnVector& J, const MatrixWrapper::Matrix& F, const MatrixWrapper::SymmetricMatrix& Q);
   void CalculateMeasUpdate(const MatrixWrapper::ColumnVector& z, const MatrixWrapper::ColumnVector& Z, const MatrixWrapper::Matrix& H, const MatrixWrapper::SymmetricMatrix& R);
-  virtual void SysUpdate(SystemModel<MatrixWrapper::ColumnVector>* const sysmodel,
-                         const MatrixWrapper::ColumnVector& u) = 0;
-  virtual void MeasUpdate(MeasurementModel<MatrixWrapper::ColumnVector,MatrixWrapper::ColumnVector>* const measmodel,
-                          const MatrixWrapper::ColumnVector& z,
-                          const MatrixWrapper::ColumnVector& s) = 0;
+  // virtual void SysUpdate(SystemModel<MatrixWrapper::ColumnVector>* const sysmodel,
+  //                        const MatrixWrapper::ColumnVector& u) = 0;
+  // virtual void MeasUpdate(MeasurementModel<MatrixWrapper::ColumnVector,MatrixWrapper::ColumnVector>* const measmodel,
+  //                         const MatrixWrapper::ColumnVector& z,
+  //                         const MatrixWrapper::ColumnVector& s) = 0;
   virtual bool UpdateInternal(SystemModel<MatrixWrapper::ColumnVector>* const sysmodel,
                               const MatrixWrapper::ColumnVector& u,
                               MeasurementModel<MatrixWrapper::ColumnVector,MatrixWrapper::ColumnVector>* const measmodel,
@@ -115,7 +115,6 @@ protected:
   SymmetricMatrix _Q;
   std::map<unsigned int, MeasUpdateVariablesExt> _mapMeasUpdateVariablesExt;
   std::map<unsigned int, MeasUpdateVariablesExt>::iterator _mapMeasUpdateVariablesExt_it;
-  
   
 };  // class
 }  // End namespace BFL
