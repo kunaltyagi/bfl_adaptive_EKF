@@ -76,6 +76,15 @@ private:
     , _Z(meas_dimension)
 {};
   }; //struct
+  struct MeasUpdateVariablesAdapt
+  {
+    ColumnVector _OptError;
+    ColumnVector _Omega;
+    ColumnVector _OptOmega;
+    SymmetricMatrix _Q;
+    Matrix _DeltaR;
+    Matric _DeltaQ;
+  }
   
 protected:
   // variables to avoid allocation during update calls
@@ -115,6 +124,9 @@ protected:
   SymmetricMatrix _Q;
   std::map<unsigned int, MeasUpdateVariablesExt> _mapMeasUpdateVariablesExt;
   std::map<unsigned int, MeasUpdateVariablesExt>::iterator _mapMeasUpdateVariablesExt_it;
+  
+  std::map<unsigned int, MeasUpdateVariablesAdapt> _mapMeasUpdateVariablesAdapt;
+  std::map<unsigned int, MeasUpdateVariablesAdapt>::iterator _mapMeasUpdateVariablesAdapt_it;
   
 };  // class
 }  // End namespace BFL
