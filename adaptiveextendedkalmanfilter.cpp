@@ -25,7 +25,7 @@ using namespace MatrixWrapper;
 #define AnalyticSys    AnalyticSystemModelGaussianUncertainty
 #define AnalyticMeas   AnalyticMeasurementModelGaussianUncertainty
   
-AdaptiveExtendedKalmanFilter::AdaptiveExtendedKalmanFilter(Gaussian* prior)
+AdaptiveExtendedKalmanFilter::AdaptiveExtendedKalmanFilter(Gaussian* prior, double Nr, double Nq)
   : // KalmanFilter(prior)
     Filter<ColumnVector,ColumnVector>(prior)
   , _Mu_new(prior->DimensionGet())
@@ -36,9 +36,14 @@ AdaptiveExtendedKalmanFilter::AdaptiveExtendedKalmanFilter(Gaussian* prior)
   , _J(prior->DimensionGet())
   , _F(prior->DimensionGet(),prior->DimensionGet())
   , _Q(prior->DimensionGet())
+  // changes for adaptive
+  , _Nr(Nr)
+  , _Nq(Nq)
 {
   // create posterior dencity
   _post = new Gaussian(*prior);
+  _alpha1 = (_Nr - 1)/_Nr;  // reduce loss in signigicant digits
+  _alpha1 = (_Nq - 1)/_Nq;
 }
 
 AdaptiveExtendedKalmanFilter::~AdaptiveExtendedKalmanFilter()
@@ -98,16 +103,42 @@ AdaptiveExtendedKalmanFilter::CalculateMeasUpdate(const ColumnVector& z, const C
   
   (_mapMeasUpdateVariables_it->second)._postHT =   (Matrix)(_post->CovarianceGet()) * H.transpose() ;
   (_mapMeasUpdateVariables_it->second)._S_Matrix =  H * (_mapMeasUpdateVariables_it->second)._postHT;
+  
+  // calcutate new state gaussian
+  // Mu = expectedValue + K*(z-Z)
+  (_mapMeasUpdateVariables_it->second)._innov = z-Z;
+  
+  // changes for adaptive begin (part 1)
+  (_mapMeasUpdateVaraiblesAdapt_it->second)._OptError *= _alpha1;
+  (_mapMeasUpdateVaraiblesAdapt_it->second)._OptError += (_mapMeasUpdateVariables_it->second)._innov/_Nr;
+  
+  (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaR = ((_mapMeasUpdateVariables_it->second)._innov - (_mapMeasUpdateVaraiblesAdapt_it->second)._OptError);
+  (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaR *= (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaR.transpose()/(Nr - 1);
+  (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaR -= (_mapMeasUpdateVariables_it->second)._S_Matrix/_Nr;
+  
+  // @TODO: ensure each R_ij is non-negative
+  R = (SymmetricMatrix)(R*_alpha1 + (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaR);  // if required, take the diagonal elements only
+  // changes for adaptive end (part 1)
+  
   (_mapMeasUpdateVariables_it->second)._S_Matrix += (Matrix)R;
   
   // _K = covariance * H' * S(-1)
   (_mapMeasUpdateVariables_it->second)._K =  (_mapMeasUpdateVariables_it->second)._postHT * ( (_mapMeasUpdateVariables_it->second)._S_Matrix.inverse());
   
-  // calcutate new state gaussian
-  // Mu = expectedValue + K*(z-Z)
-  (_mapMeasUpdateVariables_it->second)._innov = z-Z;
   _Mu_new  =  (_mapMeasUpdateVariables_it->second)._K * (_mapMeasUpdateVariables_it->second)._innov  ;
+  
+  // changes for adaptive begin (part 2)
+  _alpha2 = (_Nq - 1)/_Nq;
+  (_mapMeasUpdateVaraiblesAdapt_it->second).OptOmega *= _alpha2;
+  (_mapMeasUpdateVaraiblesAdapt_it->second).OptOmega += _Mu_new/_Nq;
+  
+  (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaQ = (_Mu_new._innov - (_mapMeasUpdateVaraiblesAdapt_it->second)._OptOmega);
+  (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaQ *= (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaQ.transpose()/(Nq - 1);
+  // @TODO: line 6, eq 19 and 20
+  // changes for adaptive end (part 2)
+  
   _Mu_new  +=  _post->ExpectedValueGet() ;
+  
   // Sigma = post - K*H*post
   _Sigma_temp = (_post->CovarianceGet());
   _Sigma_temp_par = (_mapMeasUpdateVariables_it->second)._K * H ;
@@ -169,6 +200,8 @@ AdaptiveExtendedKalmanFilter::PostGet()
 // kf ends
 
 // ekf starts
+
+// @TODO: replicate these for adapt
 void
 AdaptiveExtendedKalmanFilter::AllocateMeasModelExt(const vector<unsigned int>& meas_dimensions)
 {
@@ -187,6 +220,7 @@ AdaptiveExtendedKalmanFilter::AllocateMeasModelExt(const vector<unsigned int>& m
   }
 }
 
+// @TODO: replicate these for adapt
 void
 AdaptiveExtendedKalmanFilter::AllocateMeasModelExt(const unsigned int& meas_dimension)
 {
@@ -223,6 +257,7 @@ AdaptiveExtendedKalmanFilter::MeasUpdate(MeasurementModel<ColumnVector,ColumnVec
   _x = _post->ExpectedValueGet();
   (_mapMeasUpdateVariablesExt_it->second)._Z = ((AnalyticMeas*)measmodel)->PredictionGet(s,_x);
   (_mapMeasUpdateVariablesExt_it->second)._H = ((AnalyticMeas*)measmodel)->df_dxGet(s,_x);
+  // remove this
   (_mapMeasUpdateVariablesExt_it->second)._R = ((AnalyticMeas*)measmodel)->CovarianceGet(s,_x);
  
   CalculateMeasUpdate(z, (_mapMeasUpdateVariablesExt_it->second)._Z, (_mapMeasUpdateVariablesExt_it->second)._H, (_mapMeasUpdateVariablesExt_it->second)._R);
