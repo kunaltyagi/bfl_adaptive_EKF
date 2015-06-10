@@ -79,7 +79,6 @@ private:
   struct MeasUpdateVariablesAdapt
   {
     ColumnVector _OptError;
-    ColumnVector _Omega;
     ColumnVector _OptOmega;
     SymmetricMatrix _Q;
     Matrix _DeltaR;
