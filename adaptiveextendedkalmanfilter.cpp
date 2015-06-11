@@ -44,6 +44,7 @@ AdaptiveExtendedKalmanFilter::AdaptiveExtendedKalmanFilter(Gaussian* prior, doub
   _post = new Gaussian(*prior);
   _alpha1 = (_Nr - 1)/_Nr;  // reduce loss in signigicant digits
   _alpha1 = (_Nq - 1)/_Nq;
+  _firstData = true;
 }
 
 AdaptiveExtendedKalmanFilter::~AdaptiveExtendedKalmanFilter()
@@ -117,7 +118,7 @@ AdaptiveExtendedKalmanFilter::CalculateMeasUpdate(const ColumnVector& z, const C
   (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaR -= (_mapMeasUpdateVariables_it->second)._S_Matrix/_Nr;
   
   // @TODO: ensure each R_ij is non-negative
-  R = (SymmetricMatrix)(R*_alpha1 + (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaR);  // if required, take the diagonal elements only
+  ((Matrix)(R*_alpha1 + (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaR)).convertToSymmetricMatrix(R);
   // changes for adaptive end (part 1)
   
   (_mapMeasUpdateVariables_it->second)._S_Matrix += (Matrix)R;
@@ -134,7 +135,6 @@ AdaptiveExtendedKalmanFilter::CalculateMeasUpdate(const ColumnVector& z, const C
   
   (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaQ = (_Mu_new._innov - (_mapMeasUpdateVaraiblesAdapt_it->second)._OptOmega);
   (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaQ *= (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaQ.transpose()/(Nq - 1);
-  // @TODO: line 6, eq 19 and 20
   // changes for adaptive end (part 2)
   
   _Mu_new  +=  _post->ExpectedValueGet() ;
@@ -145,6 +145,11 @@ AdaptiveExtendedKalmanFilter::CalculateMeasUpdate(const ColumnVector& z, const C
   _Sigma_temp -=  _Sigma_temp_par * (Matrix)(_post->CovarianceGet());
   // convert to symmetric matrix
   _Sigma_temp.convertToSymmetricMatrix(_Sigma_new);
+  
+  // changes for adaptive begin (part 3)
+  // @TODO: ensure each Q_ij is non-negative
+  ((Matrix)(Q*_alpha2 + (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaQ)).convertToSymmetricMatrix((_mapMeasUpdateVaraiblesAdapt_it->second)._Q);  // if required, take the diagonal elements only
+  // changes for adaptive end (part 3)
   
   // set new state gaussian
   PostMuSet   ( _Mu_new );
@@ -201,7 +206,37 @@ AdaptiveExtendedKalmanFilter::PostGet()
 
 // ekf starts
 
-// @TODO: replicate these for adapt
+void
+AdaptiveExtendedKalmanFilter::AllocateMeasModelAdapt(const vector<unsigned int>& meas_dimensions)
+{
+  unsigned int meas_dimension;
+  for(int i = 0 ; i< meas_dimensions.size(); i++)
+  {
+    // find if variables with size meas_sizes[i] are already allocated
+    meas_dimension = meas_dimensions[i];
+    _mapMeasUpdateVariablesAdapt_it =  _mapMeasUpdateVariablesAdapt.find(meas_dimension);
+    if( _mapMeasUpdateVariablesAdapt_it == _mapMeasUpdateVariablesAdapt.end())
+    {
+      //variables with size z.rows() not allocated yet
+      _mapMeasUpdateVariablesAdapt_it = (_mapMeasUpdateVariablesAdapt.insert
+          (std::pair<unsigned int, MeasUpdateVariablesAdapt>( meas_dimension,MeasUpdateVariablesAdapt(meas_dimension,_x.rows()) ))).first;
+    }
+  }
+}
+
+void
+AdaptiveExtendedKalmanFilter::AllocateMeasModelAdapt(const unsigned int& meas_dimension)
+{
+  // find if variables with size meas_sizes[i] are already allocated
+  _mapMeasUpdateVariablesAdapt_it =  _mapMeasUpdateVariablesAdapt.find(meas_dimension);
+  if( _mapMeasUpdateVariablesAdapt_it == _mapMeasUpdateVariablesAdapt.end())
+  {
+    //variables with size z.rows() not allocated yet
+    _mapMeasUpdateVariablesAdapt_it = (_mapMeasUpdateVariablesAdapt.insert
+        (std::pair<unsigned int, MeasUpdateVariablesAdapt>( meas_dimension,MeasUpdateVariablesAdapt(meas_dimension,_x.rows()) ))).first;
+  }
+}
+
 void
 AdaptiveExtendedKalmanFilter::AllocateMeasModelExt(const vector<unsigned int>& meas_dimensions)
 {
@@ -220,7 +255,6 @@ AdaptiveExtendedKalmanFilter::AllocateMeasModelExt(const vector<unsigned int>& m
   }
 }
 
-// @TODO: replicate these for adapt
 void
 AdaptiveExtendedKalmanFilter::AllocateMeasModelExt(const unsigned int& meas_dimension)
 {
@@ -243,7 +277,8 @@ AdaptiveExtendedKalmanFilter::SysUpdate(SystemModel<ColumnVector>* const sysmode
   _F = ((AnalyticSys*)sysmodel)->df_dxGet(u,_x);
   _Q = ((AnalyticSys*)sysmodel)->CovarianceGet(u,_x);
   
-  CalculateSysUpdate(_J, _F, _Q);
+  // @TODO: confirm this
+  CalculateSysUpdate(_J, _F, (_mapMeasUpdateVaraiblesAdapt_it->second)._Q);
 }
  
 void
@@ -258,7 +293,12 @@ AdaptiveExtendedKalmanFilter::MeasUpdate(MeasurementModel<ColumnVector,ColumnVec
   (_mapMeasUpdateVariablesExt_it->second)._Z = ((AnalyticMeas*)measmodel)->PredictionGet(s,_x);
   (_mapMeasUpdateVariablesExt_it->second)._H = ((AnalyticMeas*)measmodel)->df_dxGet(s,_x);
   // remove this
-  (_mapMeasUpdateVariablesExt_it->second)._R = ((AnalyticMeas*)measmodel)->CovarianceGet(s,_x);
+  if (true == _firstData)
+  {
+    (_mapMeasUpdateVariablesExt_it->second)._R = ((AnalyticMeas*)measmodel)->CovarianceGet(s,_x);
+    (_mapMeasUpdateVariablesAdapt_it->second)._Q = _Q;
+    _firstData = false;
+  }
  
   CalculateMeasUpdate(z, (_mapMeasUpdateVariablesExt_it->second)._Z, (_mapMeasUpdateVariablesExt_it->second)._H, (_mapMeasUpdateVariablesExt_it->second)._R);
 }
