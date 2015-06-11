@@ -117,8 +117,17 @@ AdaptiveExtendedKalmanFilter::CalculateMeasUpdate(const ColumnVector& z, const C
   (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaR *= (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaR.transpose()/(Nr - 1);
   (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaR -= (_mapMeasUpdateVariables_it->second)._S_Matrix/_Nr;
   
-  // @TODO: ensure each R_ij is non-negative
   ((Matrix)(R*_alpha1 + (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaR)).convertToSymmetricMatrix(R);
+  for (int i = 0; i < R.rows(); ++i)
+  {
+    for (int j = 0; j < R.columns(); ++j)
+    {
+      if (R(i,j) < 0)
+      {
+        R(i,j) = -R(i,j);
+      }
+    }
+  }
   // changes for adaptive end (part 1)
   
   (_mapMeasUpdateVariables_it->second)._S_Matrix += (Matrix)R;
@@ -147,8 +156,17 @@ AdaptiveExtendedKalmanFilter::CalculateMeasUpdate(const ColumnVector& z, const C
   _Sigma_temp.convertToSymmetricMatrix(_Sigma_new);
   
   // changes for adaptive begin (part 3)
-  // @TODO: ensure each Q_ij is non-negative
-  ((Matrix)(Q*_alpha2 + (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaQ)).convertToSymmetricMatrix((_mapMeasUpdateVaraiblesAdapt_it->second)._Q);  // if required, take the diagonal elements only
+  ((Matrix)(_mapMeasUpdateVaraiblesAdapt_it->second)._Q*_alpha2 + (_mapMeasUpdateVaraiblesAdapt_it->second)._DeltaQ)).convertToSymmetricMatrix((_mapMeasUpdateVaraiblesAdapt_it->second)._Q);  // if required, take the diagonal elements only
+  for (int i = 0; i < _mapMeasUpdateVaraiblesAdapt_it->second)._Q.rows(); ++i)
+  {
+    for (int j = 0; j < _mapMeasUpdateVaraiblesAdapt_it->second)._Q.columns(); ++j)
+    {
+      if (_mapMeasUpdateVaraiblesAdapt_it->second)._Q(i,j) < 0)
+      {
+        _mapMeasUpdateVaraiblesAdapt_it->second)._Q(i,j) = -_mapMeasUpdateVaraiblesAdapt_it->second)._Q(i,j);
+      }
+    }
+  }
   // changes for adaptive end (part 3)
   
   // set new state gaussian
