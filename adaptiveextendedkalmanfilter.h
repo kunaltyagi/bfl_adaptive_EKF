@@ -48,8 +48,12 @@ public:
   */
   void AllocateMeasModelExt( const unsigned int& meas_dimensions);
   
+  void AcceptProvidedNoiseCovariance(bool value) { _firstData = value; }
+  bool IsProvidedNoiseCovarianceAccepted(void) { return _firstData; }
+  
 private:
   // @TODO: replace all these by a friend class AdaptiveExtendedKalmanFilter in KalmanFilter and ExtendedKalmanFilter
+  bool _firstData;
   struct MeasUpdateVariables
   {
     Matrix _S_Matrix;
